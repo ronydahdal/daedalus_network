@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package c2;
+
+service C2 {
+  // simple hello to check connection
+  rpc Hello(HelloReq) returns (HelloRes) {}
+
+  // reset everything to default
+  rpc Eradicate(EradicateReq) returns (EradicateRes) {}
+
+  // tells the server to perform the given actions
+  rpc PushActions(PushActionsReq) returns (PushActionsRes) {}
+
+  // gets the attacker positions since the last time this endpoint was queried
+  rpc GetPositions(GetPositionsReq) returns (GetPositionsRes) {}
+}
+
+message HelloReq {
+  int32 nonce = 1;
+}
+
+message HelloRes {
+  int32 nonce = 1;
+}
+
+message EradicateReq {}
+
+message EradicateRes {}
+
+message PushActionsReq {
+  repeated Action actions = 1; 
+}
+
+message PushActionsRes {}
+
+message GetPositionsReq {}
+
+message GetPositionsRes {
+  repeated Position positions = 1;
+}
+
+message Position {
+  string position = 1;
+  float time = 2;
+  string state = 3;
+}
+
+// can a oneof be repeated if it's in another message? presumably https://protobuf.dev/programming-guides/proto3/#oneof
+message Action {
+  oneof action {
+    CowrieAction cowrie = 1;
+    SUIDAction suid = 2;
+    FakeDataAction fake_data = 3;
+  }
+}
+
+message CowrieAction {
+  bool start = 1; // if start is false, then stop
+}
+
+message SUIDAction {
+  bool start = 1;/home/rony/Desktop/2024REUSE/daedalus_network/c2/protos
+message FakeDataAction {
+  bool start = 1;
+  string old_path = 2; // unused
+  string new_path = 3; // unused
+}
