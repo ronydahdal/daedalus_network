@@ -46,6 +46,46 @@ class NetworkState():
                     'fake_edge_deployed': False,
                     'fake_data': False, # assumed no initial fake data added
                     'attacker_percieved_state': 0
+                },
+                3: {
+                    'manipulated_values' : 0, # starts as default 0 -- unchanged
+                    'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv.esc, 2 - data ex.
+                    'cowrie': False,    # assumed that defender has not started Cowrie
+                    'fake_edge_deployed': False,
+                    'fake_data': False, # assumed no initial fake data added
+                    'attacker_percieved_state': 0
+                },
+                4: {
+                    'manipulated_values' : 0, # starts as default 0 -- unchanged
+                    'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv.esc, 2 - data ex.
+                    'cowrie': False,    # assumed that defender has not started Cowrie
+                    'fake_edge_deployed': False,
+                    'fake_data': False, # assumed no initial fake data added
+                    'attacker_percieved_state': 0
+                },
+                5: {
+                    'manipulated_values' : 0, # starts as default 0 -- unchanged
+                    'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv.esc, 2 - data ex.
+                    'cowrie': False,    # assumed that defender has not started Cowrie
+                    'fake_edge_deployed': False,
+                    'fake_data': False, # assumed no initial fake data added
+                    'attacker_percieved_state': 0
+                },
+                6: {
+                    'manipulated_values' : 0, # starts as default 0 -- unchanged
+                    'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv.esc, 2 - data ex.
+                    'cowrie': False,    # assumed that defender has not started Cowrie
+                    'fake_edge_deployed': False,
+                    'fake_data': False, # assumed no initial fake data added
+                    'attacker_percieved_state': 0
+                },
+                7: {
+                    'manipulated_values' : 0, # starts as default 0 -- unchanged
+                    'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv.esc, 2 - data ex.
+                    'cowrie': False,    # assumed that defender has not started Cowrie
+                    'fake_edge_deployed': False,
+                    'fake_data': False, # assumed no initial fake data added
+                    'attacker_percieved_state': 0
                 }
         }
 

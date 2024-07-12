@@ -33,10 +33,20 @@ class Network():
         self.nodes = { 
                 0: {"subnet": "public", "ip": "10.0.15.134", "value": 10, "manipulated_value": 10, 
                      "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
-                1: {"subnet": "public", "ip": "10.0.15.134", "value": 10, "manipulated_value": 10, 
+                1: {"subnet": "public", "ip": "10.0.8.22", "value": 10, "manipulated_value": 10, 
                      "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
-                2: {"subnet": "public", "ip": "10.0.15.134", "value": 10, "manipulated_value": 10, 
-                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0} 
+                2: {"subnet": "WEB", "ip": "10.0.139.86", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
+                3: {"subnet": "WEB", "ip": "10.0.137.70", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
+                4: {"subnet": "WEB", "ip": "10.0.132.76", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
+                5: {"subnet": "WEB", "ip": "10.0.128.190", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
+                6: {"subnet": "NTP/DB", "ip": "10.0.144.159", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0},
+                7: {"subnet": "NTP/DB", "ip": "10.0.149.227", "value": 10, "manipulated_value": 10, 
+                     "cowrie": False, "fake_edge_deployed": False, "fake_data": False, "attacker_percieved_state": 0}     
                      } 
         
         self.suid_history = []
