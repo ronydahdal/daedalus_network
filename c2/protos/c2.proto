@@ -60,7 +60,11 @@ message CowrieAction {
 }
 
 message SUIDAction {
-  bool start = 1;/home/rony/Desktop/2024REUSE/daedalus_network/c2/protos
+  bool start = 1;
+  string old_path = 2; // unused
+  string new_path = 3; // unused
+}
+
 message FakeDataAction {
   bool start = 1;
   string old_path = 2; // unused
