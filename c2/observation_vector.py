@@ -166,7 +166,7 @@ class NetworkState():
     def updateNetwork(self, network):
         '''
         self.nodes = { 
-                0: {simple
+                0: {
                     'manipulated_values' : 0, # starts as default 0 -- unchanged
                     'node_state': 0, # actual state of attacker, 0 - foothold, 1 - priv. es, 2 - data ex.
                     'cowrie': False,    # assumed that defender has not started Cowrie
@@ -176,21 +176,29 @@ class NetworkState():
                     'attacker_percieved_state': [] # 0 - not tricked, 1 - fake foothold, 2 - fake priv es, 3 - fake exfil
                 }
         }'''
+        current_state = network.observeNetwork()
+
+        # attacker activity for each node
+
+        attacker_activity = []
         for i, _ in enumerate(self.nodes):
             try:
-                current_state = network.observeNetwork()
                 self.nodes[i]['manipulated_values'] = current_state[i]['manipulated_value']
                 self.nodes[i]['node_state'] = self.translateState(current_state[i]['state'])    
                 self.nodes[i]['cowrie'] = current_state[i]["cowrie"]
                 self.nodes[i]['fake_edge_deployed'] = current_state[i]['fake_edge_deployed']
                 self.nodes[i]['fake_data'] = current_state[i]["fake_data"]
                 self.nodes[i]['attacker_percieved_state'] = current_state[i]['attacker_percieved_state']
-            # self.nodes[i]['suid_history'] = 
+                # self.nodes[i]['suid_history'] =  
+                attacker_activity.append(True)
                 continue
             
             # if current_state is empty -- indicates no attacker activity
             except KeyError:
-                return False
+                attacker_activity.append(False)
+                continue
+        
+        return attacker_activity
             
 
 
@@ -214,9 +222,9 @@ def stream_observation():
     state = NetworkState(net.clients)
 
     while True:
-        if not state.updateNetwork(net):
-            print(state.observationVector())
-            sleep(1)
+        state.updateNetwork(net)
+        print(state.observationVector())
+        sleep(1)
 
 # test run 
 if __name__ == "__main__":
