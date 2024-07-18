@@ -134,16 +134,16 @@ class Network():
         return 
     
     def addFakeData(self, node):
-        # action = [pb.Action(cowrie=pb.CowrieAction(start=True))]
-        # req = pb.PushActionsReq(actions=action)
-        # print(self.clients[node].PushActions(req))
+        action = [pb.Action(fake_data=pb.FakeDataAction(start=True))]
+        req = pb.PushActionsReq(actions=action)
+        print(self.clients[node].PushActions(req))
         self.modify_past_actions(node, "fake_data", True)
         return 
 
     def removeFakeData(self, node):
-        # action = [pb.Action(cowrie=pb.CowrieAction(start=False))]
-        # req = pb.PushActionsReq(actions=action)
-        # print(self.clients[node].PushActions(req))
+        action = [pb.Action(fake_data=pb.FakeDataAction(start=False))]
+        req = pb.PushActionsReq(actions=action)
+        print(self.clients[node].PushActions(req))
         self.modify_past_actions(node, "fake_data", False)
         return 
     
