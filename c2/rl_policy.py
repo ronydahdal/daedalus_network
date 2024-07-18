@@ -14,6 +14,8 @@ from network import Network
 def create_host_selection_network(num_hosts, input_shape):
     model = models.Sequential()
     model.add(layers.Dense(64, activation='relu', input_shape=(input_shape,)))
+    # model.add(layers.Input(shape=(input_shape,)))
+    # model.add(layers.Dense(64, activation='relu'))
     model.add(layers.Dense(32, activation='relu'))
     model.add(layers.Dense(num_hosts, activation='softmax'))  # curently, we are outputting prob dist. of 3 hosts
     return model
@@ -21,6 +23,8 @@ def create_host_selection_network(num_hosts, input_shape):
 def create_action_selection_network(input_shape):
     model = models.Sequential()
     model.add(layers.Dense(64, activation='relu', input_shape=(input_shape,)))
+    # model.add(layers.Input(shape=(input_shape,)))
+    # model.add(layers.Dense(64, activation='relu'))
     model.add(layers.Dense(32, activation='relu'))
     model.add(layers.Dense(7, activation='softmax'))  # 6 actions (we count 7 as we include doing nothing as the 7th action)
     return model
@@ -38,7 +42,7 @@ class CombinedNetwork(tf.keras.Model):
 
         # Sample the output from the host selection network
         host_selection_sample = tf.random.categorical(tf.math.log(host_selection_output), 1)
-        host_selection_sample = tf.squeeze(tf.one_hot(host_selection_sample, 3), axis=1)
+        host_selection_sample = tf.squeeze(tf.one_hot(host_selection_sample, 8), axis=1)
 
         # Convert inputs to float32 for concatenation
         inputs = tf.cast(inputs, tf.float32)
@@ -63,20 +67,26 @@ class DefenderPolicy:
         
         # Host input shape is the observation vector shape
         # Action input shape is the observation vector shape + host selection output shape
-        self.model = CombinedNetwork(num_hosts, observation_shape, observation_shape + 3)
+        self.model = CombinedNetwork(num_hosts, observation_shape, observation_shape + num_hosts)
         
         self.model.compile(optimizer=optimizers.Adam(), 
                            loss=['categorical_crossentropy', 'categorical_crossentropy'],
                            metrics=['accuracy'])
 
     def get_vector_stream(self):
-        # stream of observations over 10 seconds
+        # stream of observations over 5 seconds
         self.observations = []
-        for i in range(10):
-            if not self.state.updateNetwork(self.network):
-                self.observations.append(self.state.observationVector())
-                sleep(1)
-        return self.observations
+        for i in range(5):
+            # returns list of booleans if attacker is active on a node
+            attacker_activity = self.state.updateNetwork(self.network)
+            self.observations.append(self.state.observationVector())
+            sleep(1)
+        
+            # if not self.state.updateNetwork(self.network):
+            #     self.observations.append(self.state.observationVector())
+            #     sleep(1)
+
+        return self.observations, attacker_activity
 
     def flatten_observation(self, obs):
         flattened = np.concatenate([
@@ -127,22 +137,81 @@ class DefenderPolicy:
         # host_probs = host_probs.numpy().flatten()
         action_probs = action_probs.numpy().flatten()
         
-        # host_probs /= host_probs.sum()
-        action_probs /= action_probs.sum()
+        # # host_probs /= host_probs.sum()
+        # action_probs /= action_probs.sum()
+
+        host_selection_sample = host_selection_sample.numpy().flatten()
         
         # Get the chosen host from the sampled host selection
-        chosen_host = np.argmax(host_selection_sample.numpy().flatten())
+        chosen_host = np.argmax(host_selection_sample)
+
+        action_mask = self.create_action_mask(chosen_host)
+
+        # apply mask to action probabilities
+        masked_action_probs = action_probs * action_mask
+
+        # Normalize the masked probabilities
+        masked_action_probs /= masked_action_probs.sum()
 
         # choose based on prob. dist.
-        chosen_action = np.random.choice(len(action_probs), p=action_probs)
+        chosen_action = np.random.choice(len(masked_action_probs), p=masked_action_probs)
         
         print(f"chosen host: {chosen_host}, chosen action: {chosen_action}")
         self.execute(chosen_host, chosen_action)
     
+    def create_action_mask(self, node):
+        """
+        Create an action mask for a given node based on its current state.
+        Returns a list where each entry corresponds to whether an action is valid (1) or not (0).
+        """
+        state = self.state.nodes[node]
+        action_mask = [1] * 7  # Assuming 7 possible actions
+        
+        if state["cowrie"]:
+            action_mask[0] = 0  # Add fake node not allowed if cowrie is already True
+        if state["fake_edge_deployed"]:
+            action_mask[1] = 0  # Add fake edge not allowed if fake_edge_deployed is already True
+        if state["fake_data"]:
+            action_mask[2] = 0  # Add fake data not allowed if fake_data is already True
+        
+        if not state["cowrie"]:
+            action_mask[3] = 0  # Remove fake node not allowed if cowrie is False
+        if not state["fake_edge_deployed"]:
+            action_mask[4] = 0  # Remove fake edge not allowed if fake_edge_deployed is False
+        if not state["fake_data"]:
+            action_mask[5] = 0  # Remove fake data not allowed if fake_data is False
+
+        return np.array(action_mask)
+    
     def run(self):
-        observation_vector = self.get_vector_stream()
-        print(f"input observation vector: {observation_vector[-1]}")
-        self.choose_action(observation_vector[-1]) 
+        
+        while True:
+            # keep track of how many consectuve time steps the attacker is inactive for policy trigger logic
+            consecutive_attacker_absence = 0
+
+            while True:
+                # grabbing observation vector every 5 seconds
+                observation_vector, empty_bool = self.get_vector_stream()
+
+                # if there is attacker activity, trigger the policy network to take action, and continue to next time step observation
+                if True in empty_bool:
+                    print(f"input observation vector: {observation_vector[-1]}")
+                    self.choose_action(observation_vector[-1])
+                    consecutive_attacker_absence = 0
+                    continue
+
+                else:
+                    consecutive_attacker_absence += 1
+                    print("no attacker activity")
+                    # if there is no attacker activity for 4 time steps while policy network is running, then stop it
+                    if consecutive_attacker_absence >= 4:
+                        print("stopping RL policy")
+                        break
+
+            print("RL policy stopped due to consecutive inactivity")
+            continue
+
+        
 
 if __name__ == "__main__":
     defender = DefenderPolicy()
