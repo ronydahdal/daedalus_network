@@ -13,7 +13,8 @@ every 5 seconds:
 
 TODO: Embedding logic:
 '''
-
+import sys
+import threading
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models, optimizers
@@ -40,7 +41,7 @@ class CombinedNetwork(tf.keras.Model):
     def __init__(self, num_hosts, input_shape, lstm_units=32):
         super(CombinedNetwork, self).__init__()
         # LSTM layer that expects (time steps, features), our "features" is the input shape of the observation
-        self.lstm = layers.LSTM(lstm_units, activation='relu', return_sequences=False, input_shape=(None, input_shape))
+        self.lstm = layers.LSTM(lstm_units, activation='relu', return_state=True, input_shape=(None, input_shape))
         
         # feed LSTM output into the host NN. The input shape is the number of LSTM units
         self.host_selection_network = create_host_selection_network(num_hosts, lstm_units)
@@ -48,8 +49,13 @@ class CombinedNetwork(tf.keras.Model):
         # the input shape of the action NN is the LSTM shape and num_hosts as we feed output of LSTM and Host into action NN
         self.action_selection_network = create_action_selection_network(lstm_units + num_hosts)
 
-    def call(self, inputs, training=False):
-        lstm_output = self.lstm(inputs)
+    # each time step, we take input vector and state of past LSTM layer
+    def call(self, inputs, states=None, training=False):
+        if states is None:
+            states = self.lstm.get_initial_state(inputs)
+
+        lstm_output, state_h, state_c = self.lstm(inputs, initial_state=states)
+
         host_selection_output = self.host_selection_network(lstm_output)
 
         # take log probabilies returned from softmax and sample to select host (define only 1 sample)
@@ -63,7 +69,8 @@ class CombinedNetwork(tf.keras.Model):
         action_selection_output = self.action_selection_network(action_inputs)
         print(f"host selection: {host_selection_sample}")
         # print(f"action selection: {action_selection_output}")
-        return host_selection_output, host_selection_sample, action_selection_output
+        
+        return host_selection_output, host_selection_sample, action_selection_output, [state_h, state_c]
 
 # initialize the defender with the CombinedNetwork policy network
 class DefenderPolicy:
@@ -82,14 +89,17 @@ class DefenderPolicy:
         # Host input shape is the observation vector shape
         # Action input shape is the observation vector shape + host selection output shape
         # there is a hidden third parameter here, lstm_units, which is defaulted to 32 units
-        self.model = CombinedNetwork(num_hosts, observation_shape, observation_shape + num_hosts)
+        self.model = CombinedNetwork(num_hosts, observation_shape)
         
         self.model.compile(optimizer=optimizers.Adam(), 
                            loss=['categorical_crossentropy', 'categorical_crossentropy'],
                            metrics=['accuracy'])
         
-        # used for LSTM layer
-        self.observation_sequence = []
+        self.lstm_state = None
+
+        self.stop_thread = False
+        self.listener_thread = threading.Thread(target=self.listen_for_stop)
+        self.listener_thread.start()
 
     def get_vector_stream(self):
         # stream of observations over 5 seconds for 10 observation vector
@@ -146,25 +156,37 @@ class DefenderPolicy:
 
     def choose_action(self, current_observation):
         # flatten current observation vector 
-        flattened_vector = self.flatten_observation(current_observation).reshape((1, -1))
+        flattened_vector = self.flatten_observation(current_observation).reshape((1, 1, -1))
 
-        if len(self.observation_sequence) > 0:
-            # reshape the sequence to the same shape as LSTM input, (batch_size, time_steps, features)
-            # batch_size is 1, time_steps is length of sequence as that's how many time steps we've taken, and -1 tells numpy to infer size
-            input_sequence = np.array(self.observation_sequence).reshape(1, len(self.observation_sequence), -1) 
+        # if len(self.observation_sequence) > 0:
+        #     # reshape the sequence to the same shape as LSTM input, (batch_size, time_steps, features)
+        #     # batch_size is 1, time_steps is length of sequence as that's how many time steps we've taken, and -1 tells numpy to infer size
+        #     input_sequence = np.array(self.observation_sequence).reshape(1, len(self.observation_sequence), -1) 
 
-            # LSTM requires 3D shape (batch_size, time_steps, features), so we add a new axis to current observation
-            # and concatenate with input_sequence, which is already 3D 
-            embedded_vector = np.concatenate((input_sequence, flattened_vector[np.newaxis, :]), axis=1)
-            
-        # if observation sequence is empty, use only the current observation 
-        # reshape it to 3D so that the LSTM so that it's valid input to the LSTM layer
-        else:
-            embedded_vector = flattened_vector[np.newaxis, :]
+        #     # LSTM requires 3D shape (batch_size, time_steps, features), so we add a new axis to current observation
+        #     # and concatenate with input_sequence, which is already 3D 
+        #     embedded_vector = np.concatenate((input_sequence, flattened_vector[np.newaxis, :]), axis=1)
 
-        # get the probabilities from the model
-        host_probs, host_selection_sample, action_probs = self.model(embedded_vector)
-         
+        # # if observation sequence is empty, use only the current observation 
+        # # reshape it to 3D so that the LSTM so that it's valid input to the LSTM layer
+        # else:
+        #     embedded_vector = flattened_vector[np.newaxis, :]
+
+        # if we are starting the network and there is no saved state, we start with 2 zero vectors that are the same size as the LSTM_units (here it's 32)
+
+        if self.lstm_state is None:
+            self.lstm_state = [tf.zeros((1, 32)), tf.zeros((1, 32))]
+        
+        print(self.lstm_state)
+
+        # get the probabilities and output from the model
+        host_probs, host_selection_sample, action_probs, new_lstm_state = self.model(flattened_vector, states=self.lstm_state)
+        
+        # update LSTM state
+        self.lstm_state = new_lstm_state
+
+        print(self.lstm_state)
+        
         # normalize the probabilities to sum to 1
         # host_probs = host_probs.numpy().flatten()
         action_probs = action_probs.numpy().flatten()
@@ -196,8 +218,8 @@ class DefenderPolicy:
         print(f"chosen host: {chosen_host}, chosen action: {chosen_action}")
         self.execute(chosen_host, chosen_action)
 
-        # add current observation to sequence to be embedded for next iteration
-        self.update_observation_sequence(current_observation) 
+        # # add current observation to sequence to be embedded for next iteration
+        # self.update_observation_sequence(current_observation) 
     
     def update_observation_sequence(self, observation_vector):
         flattened_vector = self.flatten_observation(observation_vector)
@@ -228,47 +250,65 @@ class DefenderPolicy:
 
         return np.array(action_mask)
     
-    def run(self):
-        # reset all defensive actions and vulnerabilities (remove cowrie, SUID, data if they were started)
-        self.network.eradicate()
-        print("machines defensive actions reset")
-
-        # keep track of how many consectuve time steps the attacker is inactive for policy trigger logic
-        consecutive_attacker_absence = 0
+    # function to know when to stop the defensive agent and reset all the defensive actions
+    def listen_for_stop(self):
         while True:
+            user_input = input()
+            if user_input == "stop":
+                self.stop_thread = True
+                break
+
+    def run(self):
+        # defender is initially off
+        self.trigger = False
+
+        # if user has not stopped -- this is to manually stop the defender from observing the network when "stop" is typed into command line
+        while not self.stop_thread:
+            # keep track of how many consectuve time steps the attacker is inactive for policy trigger logic
+            self.consecutive_attacker_absence = 0
 
             # grab observation of network and check if it's empty
             observation_vector, empty_bool = self.get_vector()
             
             # if there is attacker activity in the observation, trigger the policy network to take action, and continue to next time step observation
             if True in empty_bool:
-                consecutive_attacker_absence = 0
+                self.consecutive_attacker_absence = 0
+                self.trigger = True
 
-                # add observations to the sequences that goes in to the LSTM           
-                print(f"input observation vector: {observation_vector}")
-                print(f"input observation sequence: {self.observation_sequence}")
-                print(f"length of observation sequence: {len(self.observation_sequence)}")
-                self.choose_action(observation_vector)
-
+            # if there is no attacker activity, check how many consecutive times it's been empty
             else:
-                consecutive_attacker_absence += 1
-                print(f"no attacker activity, consecutive attacker absences: {consecutive_attacker_absence}") 
+                self.consecutive_attacker_absence += 1
+                print(f"no attacker activity, consecutive attacker absences: {self.consecutive_attacker_absence}") 
 
                 # if there is no attacker activity for 10 consecutive time steps, then don't send to policy
-                if consecutive_attacker_absence >= 10:
-                    print("RL policy network off, 10 or more consecutive empty vectors")
-                # still send empty observation to policy if it's less than 10 consecutive time steps
+                if self.consecutive_attacker_absence >= 10:
+                    self.trigger = False
+
+                # if it's less than 10 consecutive time steps, still send empty observation to policy 
                 else:
-                    # add observations to the sequences that goes in to the LSTM
-                    print(f"input observation vector: {observation_vector}")
-                    print(f"input observation sequence: {self.observation_sequence}")
-                    self.choose_action(observation_vector)
+                    self.trigger = True
+            
+            # if trigger is on, send observastion to policy network
+            if self.trigger == True:          
+                print(f"input observation vector: {observation_vector}")
+                # print(f"input observation sequence: {self.observation_sequence}")
+                # print(f"length of observation sequence: {len(self.observation_sequence)}")
+                self.choose_action(observation_vector)
+            
+            else: 
+                print("RL policy network off, 10 or more consecutive empty vectors")
 
             # time step is 5 seconds
             sleep(5)
+        
+        # reset defensive actions when user interrupts
+        self.network.eradicate()
+        print("Defender stopping: machines defensive actions reset")
+        self.listener_thread.join()
+
+        return
 
         
-
 if __name__ == "__main__":
     defender = DefenderPolicy()
     defender.run()
