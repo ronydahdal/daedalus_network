@@ -115,7 +115,7 @@ class Network():
     # iterate through all clients and reset.
     def eradicate(self):
         for client in self.clients:
-           client.Eradicate(pb.EradicateReq)
+           client.Eradicate(pb.EradicateReq())
         return
 
     def addFakeNode(self, node):
