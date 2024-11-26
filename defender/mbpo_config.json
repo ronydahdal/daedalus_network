@@ -1,0 +1,18 @@
+{
+    "solver": {
+      "lr": 0.0003,
+      "batch_size": 256
+    },
+    "solver_updates": 20,
+    "model_ensemble": {
+      "num_models": 7,
+      "hidden_sizes": [256, 256],
+      "lr": 0.001
+    },
+    "num_elites": 5,
+    "epoch_length": 1000,
+    "model_train_period": 250,
+    "rollout_schedule": [20, 100, 1, 15],
+    "real_frac": 0.1
+  }
+  
